@@ -103,13 +103,60 @@ Return ONLY valid JSON. No markdown, no explanation, no additional text.`);
  *   [USER]: message content here
  *   [ASSISTANT]: response content here
  */
+/**
+ * Maximum character budget for the conversation transcript.
+ * Keeps total prompt within typical model context windows.
+ * ~8K chars ≈ ~2K tokens, leaving room for the system prompt.
+ */
+const MAX_CONVERSATION_CHARS = 8000;
+
 export function formatConversationForExtraction(messages: Message[]): string {
-  return messages
-    .map((msg) => {
-      const role = msg.role.toUpperCase();
-      return `[${role}]: ${msg.content}`;
-    })
-    .join('\n');
+  // Format all messages
+  const formatted = messages.map((msg) => {
+    const role = msg.role.toUpperCase();
+    return `[${role}]: ${msg.content}`;
+  });
+
+  let result = formatted.join('\n');
+
+  // If within budget, return as-is
+  if (result.length <= MAX_CONVERSATION_CHARS) {
+    return result;
+  }
+
+  // Truncate: keep first few and last few messages (most facts are at start/end)
+  const half = Math.floor(MAX_CONVERSATION_CHARS / 2);
+  const keepStart: string[] = [];
+  const keepEnd: string[] = [];
+  let startLen = 0;
+  let endLen = 0;
+
+  for (const line of formatted) {
+    if (startLen + line.length + 1 <= half) {
+      keepStart.push(line);
+      startLen += line.length + 1;
+    } else {
+      break;
+    }
+  }
+
+  for (let i = formatted.length - 1; i >= keepStart.length; i--) {
+    if (endLen + formatted[i].length + 1 <= half) {
+      keepEnd.unshift(formatted[i]);
+      endLen += formatted[i].length + 1;
+    } else {
+      break;
+    }
+  }
+
+  const skipped = messages.length - keepStart.length - keepEnd.length;
+  result = [
+    ...keepStart,
+    `\n[... ${skipped} messages truncated for context window ...]\n`,
+    ...keepEnd,
+  ].join('\n');
+
+  return result;
 }
 
 // ============================================

@@ -3,9 +3,11 @@
   "name": "LLM Memory Extractor",
   "version": "0.1.0",
   "description": "Extract and manage memories from LLM conversations",
-  "permissions": ["storage", "activeTab", "alarms", "notifications"],
+  "permissions": ["storage", "activeTab", "alarms", "notifications", "sidePanel", "declarativeNetRequest"],
   "host_permissions": [
     "http://localhost/*",
+    "http://localhost:11434/*",
+    "http://127.0.0.1:11434/*",
     "https://localhost/*",
     "https://api.anthropic.com/*",
     "https://api.openai.com/*",
@@ -37,6 +39,15 @@
   ],
   "action": {
     "default_title": "LLM Memory Extractor"
+  },
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "ollama_headers",
+        "enabled": true,
+        "path": "ollama-rules.json"
+      }
+    ]
   },
   "icons": {
     "16": "assets/icons/icon-16.png",

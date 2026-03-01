@@ -28,6 +28,11 @@ if (currentAdapter) {
     if (msg.type === 'GET_CAPTURE_STATE') {
       sendResponse({ recording: isCapturing });
     }
+    if (msg.type === 'CAPTURE_NOW') {
+      // Instant capture: read entire conversation and send for extraction
+      const result = captureNow();
+      sendResponse(result);
+    }
     return true;
   });
 
@@ -86,6 +91,30 @@ function stopCapture() {
     sendCapturedConversation();
     capturedMessages = [];
   }
+}
+
+function captureNow(): { ok: boolean; messageCount?: number; error?: string } {
+  if (!currentAdapter) {
+    return { ok: false, error: `No adapter for this site (URL: ${window.location.hostname})` };
+  }
+  const container = currentAdapter.getMessageContainer();
+  if (!container) {
+    return { ok: false, error: `Could not find message container on ${currentAdapter.id}` };
+  }
+  const messages = currentAdapter.parseMessages(container);
+  if (messages.length < 3) {
+    return {
+      ok: false,
+      error: `Only ${messages.length} messages found on ${currentAdapter.id} (need >= 3). Container: <${container.tagName.toLowerCase()}${container.className ? '.' + container.className.split(' ')[0] : ''}>`,
+    };
+  }
+  chrome.runtime.sendMessage({
+    type: 'CONVERSATION_CAPTURED',
+    messages,
+    platform: currentAdapter.id,
+    title: document.title,
+  });
+  return { ok: true, messageCount: messages.length };
 }
 
 function sendCapturedConversation() {

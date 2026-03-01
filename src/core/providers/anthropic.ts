@@ -17,6 +17,7 @@ export function createAnthropicProvider(apiKey: string): LLMProvider {
             'Content-Type': 'application/json',
             'x-api-key': apiKey,
             'anthropic-version': '2023-06-01',
+            'anthropic-dangerous-direct-browser-access': 'true',
           },
           body: JSON.stringify({
             model,
@@ -36,7 +37,7 @@ export function createAnthropicProvider(apiKey: string): LLMProvider {
     },
 
     async listModels(): Promise<string[]> {
-      return ['claude-sonnet-4-20250514', 'claude-haiku-4-5-20251001'];
+      return ['claude-sonnet-4-6-20260320', 'claude-haiku-4-5-20251001', 'claude-sonnet-4-20250514'];
     },
 
     async validateKey(): Promise<boolean> {
@@ -47,6 +48,7 @@ export function createAnthropicProvider(apiKey: string): LLMProvider {
             'Content-Type': 'application/json',
             'x-api-key': apiKey,
             'anthropic-version': '2023-06-01',
+            'anthropic-dangerous-direct-browser-access': 'true',
           },
           body: JSON.stringify({
             model: 'claude-haiku-4-5-20251001',

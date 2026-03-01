@@ -21,6 +21,30 @@ import { storage, badge } from '@/utils/browser';
 import type { ProviderConfig, CapturedConversation } from '@/types';
 
 // ---------------------------------------------------------------------------
+// Activity log — in-memory ring buffer for debugging
+// ---------------------------------------------------------------------------
+
+interface LogEntry {
+  id: number;
+  timestamp: number;
+  level: 'info' | 'warn' | 'error';
+  message: string;
+  detail?: string;
+}
+
+const MAX_LOG_ENTRIES = 200;
+const activityLog: LogEntry[] = [];
+let logSeq = 0;
+
+function log(level: LogEntry['level'], message: string, detail?: string) {
+  const entry: LogEntry = { id: ++logSeq, timestamp: Date.now(), level, message, detail };
+  activityLog.push(entry);
+  if (activityLog.length > MAX_LOG_ENTRIES) activityLog.shift();
+  const prefix = level === 'error' ? '❌' : level === 'warn' ? '⚠️' : 'ℹ️';
+  console.log(`[LME ${prefix}] ${message}`, detail || '');
+}
+
+// ---------------------------------------------------------------------------
 // Capture state tracking
 // ---------------------------------------------------------------------------
 
@@ -40,8 +64,13 @@ async function handleConversationCaptured(data: {
   platform: string;
   title: string;
 }) {
+  log('info', `Conversation received from ${data.platform}`, `${data.messages.length} messages, title: "${data.title}"`);
+
   // 1. Skip short conversations (< 3 messages)
-  if (data.messages.length < 3) return;
+  if (data.messages.length < 3) {
+    log('warn', 'Skipped: too few messages', `Only ${data.messages.length} messages (need >= 3)`);
+    return;
+  }
 
   // 2. Store conversation in IndexedDB
   const conversationId = uuid();
@@ -59,9 +88,12 @@ async function handleConversationCaptured(data: {
     factIds: [],
   };
   await addConversation(conversation);
+  log('info', 'Conversation stored in IndexedDB', `id: ${conversationId}`);
 
   // 3. Load schema
   const schema = await loadSchema();
+  const enabledCategories = schema.categories.filter(c => c.enabled);
+  log('info', 'Schema loaded', `${enabledCategories.length} enabled categories`);
 
   // 4. Build prompt from schema
   const systemPrompt = buildExtractionPrompt(schema);
@@ -70,8 +102,10 @@ async function handleConversationCaptured(data: {
   // 5. Get provider config
   const config = await storage.get<ProviderConfig>('providerConfig');
   const provider = createProvider(config || { type: 'ollama' });
+  log('info', 'LLM provider ready', `type: ${config?.type || 'ollama'}, model: ${config?.model || 'llama3'}`);
 
   // 6. Call LLM with keepalive
+  log('info', 'Calling LLM for extraction...', `prompt length: ${userMessage.length} chars`);
   chrome.alarms.create('extraction-keepalive', { periodInMinutes: 0.4 });
   try {
     const response = await provider.chat(
@@ -82,19 +116,25 @@ async function handleConversationCaptured(data: {
       config?.model || 'llama3',
     );
 
+    log('info', 'LLM response received', `length: ${response.length} chars`);
+    log('info', 'Raw LLM response (first 500 chars)', response.substring(0, 500));
+
     // 7. Parse response
     let extractedFacts = parseExtractionResponse(response);
     extractedFacts = extractedFacts.map((f) => ({
       ...f,
       value: normalizeFactValue(f.value),
     }));
+    log('info', 'Parsed extraction response', `${extractedFacts.length} facts extracted`);
 
     // 8. Deduplicate against existing facts
     const existingFacts = await getAllFacts();
     extractedFacts = deduplicateFacts(extractedFacts, existingFacts);
+    log('info', 'After deduplication', `${extractedFacts.length} unique facts`);
 
     // 9. PII filter
     const { clean, flagged } = filterFacts(extractedFacts, schema.piiRules);
+    log('info', 'PII filter complete', `${clean.length} clean, ${flagged.length} flagged`);
 
     // 10. Store as pending facts
     const newFactIds: string[] = [];
@@ -134,8 +174,10 @@ async function handleConversationCaptured(data: {
       await badge.set(String(newFactIds.length));
     }
 
-    console.log(`Extracted ${newFactIds.length} facts from ${data.platform} conversation`);
+    log('info', `Extraction complete`, `${newFactIds.length} facts stored from ${data.platform}`);
   } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    log('error', 'Extraction failed', errMsg);
     console.error('Extraction failed:', err);
     await updateConversation(conversationId, { extractionStatus: 'failed' });
   } finally {
@@ -165,11 +207,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (tabId) {
           captureState.set(tabId, message.recording);
         }
+        log('info', `Capture ${message.recording ? 'started' : 'stopped'}`, `tab: ${tabId}, platform: ${message.platform || 'unknown'}`);
         return { ok: true };
       }
       case 'CONVERSATION_CAPTURED': {
+        log('info', 'Conversation captured, queuing extraction', `platform: ${message.platform}, messages: ${message.messages?.length || 0}`);
         // Fire and forget — don't block the content script
-        handleConversationCaptured(message).catch(console.error);
+        handleConversationCaptured(message).catch((err) => {
+          log('error', 'handleConversationCaptured threw', err instanceof Error ? err.message : String(err));
+        });
         return { ok: true, queued: true };
       }
       case 'GET_CAPTURE_STATE': {
@@ -188,11 +234,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
       case 'GET_PROVIDER_CONFIG': {
         const config = await storage.get<ProviderConfig>('providerConfig');
+        log('info', 'Provider config loaded', `type: ${config?.type || 'ollama'}, hasKey: ${!!config?.apiKey}, model: ${config?.model || 'none'}`);
         return config || { type: 'ollama' };
       }
       case 'SAVE_PROVIDER_CONFIG': {
         await storage.set('providerConfig', message.config);
+        log('info', 'Provider config saved', `type: ${message.config?.type}, hasKey: ${!!message.config?.apiKey}, model: ${message.config?.model}`);
         return { ok: true };
+      }
+      case 'GET_ACTIVITY_LOG': {
+        const sinceId = message.sinceId || 0;
+        return activityLog.filter(e => e.id > sinceId);
       }
       case 'RETRY_EXTRACTION': {
         const conv = await getConversation(message.conversationId);

@@ -15,6 +15,20 @@ interface Props {
   onChange: (config: ProviderConfigType) => void;
 }
 
+// Store API keys per provider so switching doesn't lose them
+const API_KEYS_STORAGE_KEY = 'providerApiKeys';
+
+async function loadSavedKeys(): Promise<Record<string, string>> {
+  const result = await chrome.storage.local.get(API_KEYS_STORAGE_KEY);
+  return result[API_KEYS_STORAGE_KEY] || {};
+}
+
+async function saveKeyForProvider(providerType: string, apiKey: string) {
+  const keys = await loadSavedKeys();
+  keys[providerType] = apiKey;
+  await chrome.storage.local.set({ [API_KEYS_STORAGE_KEY]: keys });
+}
+
 export function ProviderConfig({ config, onChange }: Props) {
   const [models, setModels] = useState<string[]>([]);
   const [testing, setTesting] = useState(false);
@@ -60,7 +74,16 @@ export function ProviderConfig({ config, onChange }: Props) {
         <label class="text-xs text-gray-500 block mb-1">LLM Provider</label>
         <select
           value={config.type}
-          onChange={(e) => onChange({ ...config, type: (e.target as HTMLSelectElement).value as ProviderType, apiKey: '', model: '' })}
+          onChange={async (e) => {
+            // Save current key before switching
+            if (config.apiKey) {
+              await saveKeyForProvider(config.type, config.apiKey);
+            }
+            const newType = (e.target as HTMLSelectElement).value as ProviderType;
+            // Restore saved key for new provider
+            const savedKeys = await loadSavedKeys();
+            onChange({ ...config, type: newType, apiKey: savedKeys[newType] || '', model: '' });
+          }}
           class="w-full text-sm border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-green-500"
         >
           {PROVIDERS.map(p => <option key={p.type} value={p.type}>{p.name}</option>)}
@@ -88,7 +111,11 @@ export function ProviderConfig({ config, onChange }: Props) {
             <input
               type={showKey ? 'text' : 'password'}
               value={config.apiKey || ''}
-              onInput={(e) => onChange({ ...config, apiKey: (e.target as HTMLInputElement).value })}
+              onInput={(e) => {
+                const newKey = (e.target as HTMLInputElement).value;
+                saveKeyForProvider(config.type, newKey);
+                onChange({ ...config, apiKey: newKey });
+              }}
               placeholder="sk-..."
               class="flex-1 text-sm border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-green-500"
             />
