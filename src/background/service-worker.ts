@@ -214,4 +214,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return true; // Keep channel open for async response
 });
 
+// ---------------------------------------------------------------------------
+// Side panel: open on action click
+// ---------------------------------------------------------------------------
+
+// Enable opening side panel by clicking the extension icon
+chrome.sidePanel
+  .setPanelBehavior({ openPanelOnActionClick: true })
+  .catch(console.error);
+
 console.log('LLM Memory Extractor service worker loaded');
