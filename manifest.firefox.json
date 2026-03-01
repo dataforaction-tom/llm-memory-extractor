@@ -1,0 +1,12 @@
+{
+  "sidebar_action": {
+    "default_panel": "src/sidepanel/index.html",
+    "default_title": "LLM Memory Extractor"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "llm-memory-extractor@example.com",
+      "strict_min_version": "109.0"
+    }
+  }
+}

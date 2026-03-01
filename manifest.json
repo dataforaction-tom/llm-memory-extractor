@@ -1,0 +1,47 @@
+{
+  "manifest_version": 3,
+  "name": "LLM Memory Extractor",
+  "version": "0.1.0",
+  "description": "Extract and manage memories from LLM conversations",
+  "permissions": ["storage", "activeTab", "alarms", "notifications"],
+  "host_permissions": [
+    "http://localhost/*",
+    "https://localhost/*",
+    "https://api.anthropic.com/*",
+    "https://api.openai.com/*",
+    "https://api.mistral.ai/*",
+    "https://generativelanguage.googleapis.com/*",
+    "https://claude.ai/*",
+    "https://chat.openai.com/*",
+    "https://chatgpt.com/*",
+    "https://chat.mistral.ai/*",
+    "https://gemini.google.com/*",
+    "https://aistudio.google.com/*"
+  ],
+  "background": {
+    "service_worker": "src/background/service-worker.ts",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://claude.ai/*",
+        "https://chat.openai.com/*",
+        "https://chatgpt.com/*",
+        "https://chat.mistral.ai/*",
+        "https://gemini.google.com/*",
+        "https://aistudio.google.com/*"
+      ],
+      "js": ["src/content/capture.ts"],
+      "css": ["src/content/toggle.css"]
+    }
+  ],
+  "action": {
+    "default_title": "LLM Memory Extractor"
+  },
+  "icons": {
+    "16": "assets/icons/icon-16.png",
+    "48": "assets/icons/icon-48.png",
+    "128": "assets/icons/icon-128.png"
+  }
+}
