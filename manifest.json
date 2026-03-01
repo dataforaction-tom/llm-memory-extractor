@@ -32,8 +32,7 @@
         "https://gemini.google.com/*",
         "https://aistudio.google.com/*"
       ],
-      "js": ["src/content/capture.ts"],
-      "css": ["src/content/toggle.css"]
+      "js": ["src/content/capture.ts"]
     }
   ],
   "action": {
