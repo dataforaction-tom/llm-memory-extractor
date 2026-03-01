@@ -1,5 +1,10 @@
 import type { LLMProvider, ProviderConfig } from '@/types';
+import { createAnthropicProvider } from './anthropic';
 import { createOllamaProvider } from './ollama';
+import { createOpenAIProvider } from './openai';
+import { createMistralProvider } from './mistral';
+import { createGoogleProvider } from './google';
+import { createGreenPTProvider } from './greenpt';
 
 export class ProviderError extends Error {
   constructor(message: string, public status?: number) {
@@ -26,17 +31,21 @@ export async function withRetry<T>(
   throw new Error('Unreachable');
 }
 
-// Factory - will be filled in as providers are added
+// Factory
 export function createProvider(config: ProviderConfig): LLMProvider {
   switch (config.type) {
     case 'ollama':
       return createOllamaProvider(config.endpoint);
     case 'anthropic':
+      return createAnthropicProvider(config.apiKey!);
     case 'openai':
+      return createOpenAIProvider(config.apiKey!);
     case 'mistral':
+      return createMistralProvider(config.apiKey!);
     case 'google':
+      return createGoogleProvider(config.apiKey!);
     case 'greenpt':
-      throw new Error(`Provider not yet implemented: ${config.type}`);
+      return createGreenPTProvider(config.apiKey!, config.endpoint);
     default:
       throw new Error(`Unknown provider: ${config.type}`);
   }
