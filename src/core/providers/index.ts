@@ -1,4 +1,5 @@
 import type { LLMProvider, ProviderConfig } from '@/types';
+import { createOllamaProvider } from './ollama';
 
 export class ProviderError extends Error {
   constructor(message: string, public status?: number) {
@@ -29,8 +30,7 @@ export async function withRetry<T>(
 export function createProvider(config: ProviderConfig): LLMProvider {
   switch (config.type) {
     case 'ollama':
-      // TODO: import and create ollama provider
-      throw new Error(`Provider not yet implemented: ${config.type}`);
+      return createOllamaProvider(config.endpoint);
     case 'anthropic':
     case 'openai':
     case 'mistral':
