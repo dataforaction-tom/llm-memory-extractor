@@ -1,6 +1,7 @@
 import { useState } from 'preact/hooks';
 import { Dashboard } from './pages/Dashboard';
 import { Facts } from './pages/Facts';
+import { Documents } from './pages/Documents';
 import { SchemaEditor } from './pages/SchemaEditor';
 import { Settings } from './pages/Settings';
 
@@ -44,6 +45,17 @@ function SchemaIcon(props: Record<string, unknown>) {
   );
 }
 
+function DocumentsIcon(props: Record<string, unknown>) {
+  return (
+    <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <polyline points="14 2 14 8 20 8" />
+      <line x1="16" y1="13" x2="8" y2="13" />
+      <line x1="16" y1="17" x2="8" y2="17" />
+    </svg>
+  );
+}
+
 function SettingsIcon(props: Record<string, unknown>) {
   return (
     <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -56,6 +68,7 @@ function SettingsIcon(props: Record<string, unknown>) {
 const TABS = [
   { id: 'dashboard', label: 'Dashboard', icon: DashboardIcon },
   { id: 'facts', label: 'Facts', icon: FactsIcon },
+  { id: 'documents', label: 'Docs', icon: DocumentsIcon },
   { id: 'schema', label: 'Schema', icon: SchemaIcon },
   { id: 'settings', label: 'Settings', icon: SettingsIcon },
 ] as const;
@@ -77,6 +90,7 @@ export function App() {
         {activeTab === 'dashboard' && <Dashboard />}
         {activeTab === 'facts' && <Facts />}
         {activeTab === 'schema' && <SchemaEditor />}
+        {activeTab === 'documents' && <Documents />}
         {activeTab === 'settings' && <Settings />}
       </main>
 
