@@ -20,3 +20,8 @@ export type {
 } from './providers';
 
 export type { SiteAdapter } from './adapters';
+
+export type {
+  MemoryDocument,
+  DocumentHistoryEntry,
+} from './documents';
