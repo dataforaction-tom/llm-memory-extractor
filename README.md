@@ -1,6 +1,6 @@
 # LLM Memory Extractor
 
-Open-source browser extension that captures your LLM conversations and extracts personal context. Local-first. Fully configurable. Bring your own LLM.
+Open-source browser extension that captures your LLM conversations and extracts personal context into a memory profile you own. Local-first. Fully configurable. Bring your own LLM.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-0.1.0-green.svg)](package.json)
@@ -9,7 +9,10 @@ Open-source browser extension that captures your LLM conversations and extracts 
 
 - **Captures conversations** from Claude, ChatGPT, Gemini, Perplexity, Mistral, and Grok
 - **Extracts personal facts and preferences** using AI (Ollama locally or cloud APIs)
+- **Builds memory documents** — confirmed facts are merged into readable markdown profiles, one per category, written as coherent narrative rather than bullet lists
 - **Fully configurable extraction schema** — define your own categories, hints, and examples
+- **Diff review and version history** — see exactly what changed before accepting a merge, and restore any previous version
+- **Filesystem sync** — save documents to a local folder as markdown files
 - **Stores everything locally** in your browser — your data never leaves unless you choose a cloud LLM
 
 ## Quick Start
@@ -67,7 +70,20 @@ If you prefer a cloud LLM, bring your own API key. Keys are stored in your brows
 2. **Chat normally** — the extension watches for new messages
 3. **Stop capture** — your conversation is sent to your chosen LLM for fact extraction
 4. **Review extracted facts** in the side panel — confirm, reject, or edit
-5. **Facts accumulate** over time, building your personal context memory
+5. **Merge into documents** — confirmed facts are woven into markdown memory documents by your LLM, with diff review so you control what gets saved
+6. **Sync and export** — save documents to your filesystem, or export everything as markdown or JSON
+
+## The Side Panel
+
+Click the extension icon to open the side panel. It has five tabs:
+
+| Tab | What it's for |
+|-----|---------------|
+| **Dashboard** | Stats, recent facts, capture controls, and a live activity log |
+| **Facts** | Review, confirm, reject, and search extracted facts with filters by status, category, or text |
+| **Documents** | Memory documents per category — merge new facts, review diffs, browse version history, edit directly or in a pop-out window |
+| **Schema** | Customise the 22 built-in categories, add your own, and configure PII detection rules |
+| **Settings** | Choose your LLM provider, export/import data, set up filesystem sync |
 
 ## Customizing Your Schema
 
@@ -109,6 +125,10 @@ npm run build:chrome     # build for Chrome only
 npm run build:firefox    # build for Firefox only
 npm run lint             # type-check with TypeScript
 ```
+
+## Documentation
+
+Full user guide and changelog available in the [`docs/`](docs/) directory, designed for hosting with [MkDocs Material](https://squidfunk.github.io/mkdocs-material/).
 
 ## Contributing
 
