@@ -60,7 +60,7 @@ export async function generateAboutMe(): Promise<MemoryDocument | null> {
 
   // Filter to docs with content, excluding the aboutme doc itself
   const contentDocs = allDocs.filter(
-    (d) => d.id !== ABOUTME_ID && d.content.trim(),
+    (d) => d.categoryId !== ABOUTME_ID && d.content.trim(),
   );
 
   if (contentDocs.length === 0) {
