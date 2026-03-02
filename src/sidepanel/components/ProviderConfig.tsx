@@ -20,7 +20,7 @@ const API_KEYS_STORAGE_KEY = 'providerApiKeys';
 
 async function loadSavedKeys(): Promise<Record<string, string>> {
   const result = await chrome.storage.local.get(API_KEYS_STORAGE_KEY);
-  return result[API_KEYS_STORAGE_KEY] || {};
+  return (result[API_KEYS_STORAGE_KEY] || {}) as Record<string, string>;
 }
 
 async function saveKeyForProvider(providerType: string, apiKey: string) {
