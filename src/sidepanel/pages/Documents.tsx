@@ -6,6 +6,7 @@ import { renderMarkdown } from '@/core/render-markdown';
 import { DiffView } from '../components/DiffView';
 import { VersionHistory } from '../components/VersionHistory';
 import { syncDocument, downloadDocument, hasFileSystemAccess } from '@/storage/filesystem';
+import { ABOUTME_ID } from '@/core/aboutme';
 import type { MemoryDocument, Category } from '@/types';
 
 interface DocSummary {
@@ -35,8 +36,8 @@ export function Documents() {
       const summaries: DocSummary[] = [];
       for (const doc of allDocs) {
         const category = schema.categories.find((c) => c.id === doc.categoryId) ?? null;
-        const unmerged = await getUnmergedFacts(doc.categoryId);
-        summaries.push({ doc, category, unmergedCount: unmerged.length });
+        const unmergedCount = doc.categoryId === ABOUTME_ID ? 0 : (await getUnmergedFacts(doc.categoryId)).length;
+        summaries.push({ doc, category, unmergedCount });
       }
 
       // Also check categories with no doc yet but with unmerged facts
@@ -64,7 +65,12 @@ export function Documents() {
       }
 
       console.log(`[LME Documents] total summaries: ${summaries.length}`);
-      summaries.sort((a, b) => b.doc.updatedAt - a.doc.updatedAt);
+      summaries.sort((a, b) => {
+        // Pin aboutme doc to top
+        if (a.doc.categoryId === ABOUTME_ID) return -1;
+        if (b.doc.categoryId === ABOUTME_ID) return 1;
+        return b.doc.updatedAt - a.doc.updatedAt;
+      });
       setDocs(summaries);
     } catch (err) {
       console.error('[LME Documents] load failed:', err);
@@ -76,30 +82,40 @@ export function Documents() {
     return <DocumentEditor doc={selectedDoc} onBack={() => { setSelectedDoc(null); load(); }} />;
   }
 
-  if (loading) return <div class="p-4 text-sm text-gray-500">Loading documents...</div>;
+  if (loading) return <div class="p-4 text-sm text-ink-muted">Loading documents...</div>;
 
   return (
     <div class="p-4 space-y-3">
-      <h3 class="font-medium text-gray-900">Memory Documents</h3>
+      <h3 class="text-sm font-serif text-ink">Memory Documents</h3>
 
       {docs.length === 0 ? (
-        <p class="text-sm text-gray-500 text-center py-8">
-          No documents yet. Confirm some facts to get started.
-        </p>
+        <div class="text-center py-12">
+          <p class="text-sm text-ink-muted">No documents yet</p>
+          <p class="text-xs text-ink-muted mt-1">Confirm some facts to get started</p>
+        </div>
       ) : (
         docs.map((s) => (
           <button
             key={s.doc.id}
             onClick={() => setSelectedDoc(s.doc)}
-            class="w-full text-left bg-white rounded-lg border border-gray-200 p-3 hover:border-green-300 transition-colors"
+            class={`w-full text-left bg-surface rounded-md border p-3 hover:border-accent/40 transition-colors ${
+              s.doc.categoryId === ABOUTME_ID
+                ? 'border-accent/30 border-l-[3px] border-l-accent'
+                : 'border-border'
+            }`}
           >
             <div class="flex items-center justify-between mb-1">
-              <span class="text-sm font-medium text-gray-900">{s.doc.title}</span>
-              {s.doc.syncedAt && (
-                <span class="text-xs text-green-600">synced</span>
-              )}
+              <span class="text-sm font-medium text-ink">{s.doc.title}</span>
+              <div class="flex items-center gap-2">
+                {s.doc.categoryId === ABOUTME_ID && (
+                  <span class="text-[10px] px-1.5 py-0.5 bg-accent/10 text-accent rounded font-medium">Profile</span>
+                )}
+                {s.doc.syncedAt && (
+                  <span class="text-[11px] text-sage">synced</span>
+                )}
+              </div>
             </div>
-            <div class="flex items-center gap-3 text-xs text-gray-500">
+            <div class="flex items-center gap-3 text-[11px] text-ink-muted">
               {s.doc.content && (
                 <span>{s.doc.content.split(/\s+/).length} words</span>
               )}
@@ -109,7 +125,7 @@ export function Documents() {
               {!s.doc.content && <span>New</span>}
             </div>
             {s.unmergedCount > 0 && (
-              <div class="mt-2 text-xs px-2 py-1 bg-yellow-50 border border-yellow-200 rounded text-yellow-700">
+              <div class="mt-2 text-[11px] px-2 py-1 bg-ochre-faint border border-ochre-light rounded text-ochre font-medium">
                 {s.unmergedCount} fact{s.unmergedCount !== 1 ? 's' : ''} ready to merge
               </div>
             )}
@@ -140,6 +156,7 @@ function DocumentEditor({ doc: initialDoc, onBack }: { doc: MemoryDocument; onBa
   const hasChanges = editContent !== doc.content;
 
   useEffect(() => {
+    if (doc.categoryId === ABOUTME_ID) return;
     getUnmergedFacts(doc.categoryId).then((f) => setUnmergedCount(f.length));
   }, [doc]);
 
@@ -218,36 +235,36 @@ function DocumentEditor({ doc: initialDoc, onBack }: { doc: MemoryDocument; onBa
   return (
     <div class="flex flex-col h-full">
       {/* Top bar */}
-      <div class="flex items-center gap-2 px-3 py-2 border-b border-gray-200 bg-white">
-        <button onClick={onBack} class="text-gray-500 hover:text-gray-700 text-sm">&larr;</button>
-        <span class="flex-1 text-sm font-medium text-gray-900 truncate">{doc.title}</span>
-        {saveMsg && <span class="text-xs text-green-600">{saveMsg}</span>}
+      <div class="flex items-center gap-2 px-3 py-2 border-b border-border bg-surface">
+        <button onClick={onBack} class="text-ink-muted hover:text-ink text-sm transition-colors">&larr;</button>
+        <span class="flex-1 text-sm font-medium text-ink truncate">{doc.title}</span>
+        {saveMsg && <span class="text-[11px] text-sage">{saveMsg}</span>}
         {hasChanges && (
           <button
             onClick={handleSave}
             disabled={saving}
-            class="text-xs px-2 py-1 bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50"
+            class="text-[11px] px-2 py-1 bg-accent text-surface rounded hover:bg-accent-hover disabled:opacity-50 transition-colors"
           >
             {saving ? 'Saving...' : 'Save'}
           </button>
         )}
         <button
           onClick={() => setShowHistory(true)}
-          class="text-xs px-2 py-1 border border-gray-200 rounded hover:bg-gray-50"
+          class="text-[11px] px-2 py-1 border border-border rounded hover:bg-ivory transition-colors text-ink-secondary"
           title="Version history"
         >
           History
         </button>
         <button
           onClick={() => hasFileSystemAccess() ? syncDocument(doc) : downloadDocument(doc)}
-          class="text-xs px-2 py-1 border border-gray-200 rounded hover:bg-gray-50"
+          class="text-[11px] px-2 py-1 border border-border rounded hover:bg-ivory transition-colors text-ink-secondary"
           title={hasFileSystemAccess() ? 'Sync to folder' : 'Download .md'}
         >
           {hasFileSystemAccess() ? 'Sync' : 'Download'}
         </button>
         <button
           onClick={handlePopOut}
-          class="text-xs px-2 py-1 border border-gray-200 rounded hover:bg-gray-50"
+          class="text-[11px] px-2 py-1 border border-border rounded hover:bg-ivory transition-colors text-ink-secondary"
           title="Open in new window"
         >
           &#x2934;
@@ -256,44 +273,50 @@ function DocumentEditor({ doc: initialDoc, onBack }: { doc: MemoryDocument; onBa
 
       {/* Merge banner */}
       {unmergedCount > 0 && (
-        <div class="flex items-center justify-between px-3 py-2 bg-yellow-50 border-b border-yellow-200">
-          <span class="text-xs text-yellow-700">
+        <div class="flex items-center justify-between px-3 py-2 bg-ochre-faint border-b border-ochre-light">
+          <span class="text-[11px] text-ochre font-medium">
             {unmergedCount} fact{unmergedCount !== 1 ? 's' : ''} ready to merge
           </span>
           <button
             onClick={handleMerge}
             disabled={merging}
-            class="text-xs px-3 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600 disabled:opacity-50"
+            class="text-[11px] px-3 py-1 bg-accent text-surface rounded hover:bg-accent-hover disabled:opacity-50 transition-colors"
           >
             {merging ? 'Merging...' : 'Review Merge'}
           </button>
         </div>
       )}
       {mergeError && (
-        <div class="px-3 py-2 bg-red-50 border-b border-red-200 text-xs text-red-700">{mergeError}</div>
+        <div class="px-3 py-2 bg-rose-faint border-b border-rose-light text-[11px] text-rose">{mergeError}</div>
       )}
 
       {/* Tab switcher */}
-      <div class="flex border-b border-gray-200 bg-white">
+      <div class="flex border-b border-border bg-surface">
         <button
           onClick={() => setActiveEditorTab('edit')}
-          class={`flex-1 text-xs py-2 ${
+          class={`flex-1 text-xs py-2 transition-colors relative ${
             activeEditorTab === 'edit'
-              ? 'text-green-600 border-b-2 border-green-600'
-              : 'text-gray-500 hover:text-gray-700'
+              ? 'text-accent font-medium'
+              : 'text-ink-muted hover:text-ink-secondary'
           }`}
         >
           Edit
+          {activeEditorTab === 'edit' && (
+            <span class="absolute bottom-0 left-1/2 -translate-x-1/2 w-8 h-[2px] bg-accent rounded-full" />
+          )}
         </button>
         <button
           onClick={() => setActiveEditorTab('preview')}
-          class={`flex-1 text-xs py-2 ${
+          class={`flex-1 text-xs py-2 transition-colors relative ${
             activeEditorTab === 'preview'
-              ? 'text-green-600 border-b-2 border-green-600'
-              : 'text-gray-500 hover:text-gray-700'
+              ? 'text-accent font-medium'
+              : 'text-ink-muted hover:text-ink-secondary'
           }`}
         >
           Preview
+          {activeEditorTab === 'preview' && (
+            <span class="absolute bottom-0 left-1/2 -translate-x-1/2 w-8 h-[2px] bg-accent rounded-full" />
+          )}
         </button>
       </div>
 
@@ -303,12 +326,12 @@ function DocumentEditor({ doc: initialDoc, onBack }: { doc: MemoryDocument; onBa
           <textarea
             value={editContent}
             onInput={(e) => setEditContent((e.target as HTMLTextAreaElement).value)}
-            class="w-full h-full p-3 text-sm font-mono resize-none border-none focus:outline-none"
+            class="w-full h-full p-3 text-sm font-mono bg-ivory resize-none border-none focus:outline-none text-ink"
             spellcheck={false}
           />
         ) : (
           <div
-            class="p-3 prose-sm"
+            class="p-4 prose"
             dangerouslySetInnerHTML={{ __html: renderMarkdown(editContent) }}
           />
         )}
