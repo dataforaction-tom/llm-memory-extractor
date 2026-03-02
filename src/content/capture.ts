@@ -102,10 +102,10 @@ function captureNow(): { ok: boolean; messageCount?: number; error?: string } {
     return { ok: false, error: `Could not find message container on ${currentAdapter.id}` };
   }
   const messages = currentAdapter.parseMessages(container);
-  if (messages.length < 3) {
+  if (messages.length < 1) {
     return {
       ok: false,
-      error: `Only ${messages.length} messages found on ${currentAdapter.id} (need >= 3). Container: <${container.tagName.toLowerCase()}${container.className ? '.' + container.className.split(' ')[0] : ''}>`,
+      error: `No messages found on ${currentAdapter.id}. Container: <${container.tagName.toLowerCase()}${container.className ? '.' + container.className.split(' ')[0] : ''}>`,
     };
   }
   chrome.runtime.sendMessage({
@@ -118,7 +118,7 @@ function captureNow(): { ok: boolean; messageCount?: number; error?: string } {
 }
 
 function sendCapturedConversation() {
-  if (capturedMessages.length < 3) return; // Skip short conversations
+  if (capturedMessages.length < 1) return; // Skip empty conversations
   chrome.runtime.sendMessage({
     type: 'CONVERSATION_CAPTURED',
     messages: capturedMessages,

@@ -76,9 +76,9 @@ async function handleConversationCaptured(data: {
   });
   // --- End diagnostic ---
 
-  // 1. Skip short conversations (< 3 messages)
-  if (data.messages.length < 3) {
-    log('warn', 'Skipped: too few messages', `Only ${data.messages.length} messages (need >= 3)`);
+  // 1. Skip empty conversations
+  if (data.messages.length < 1) {
+    log('warn', 'Skipped: no messages', 'Conversation had 0 messages');
     return;
   }
 
@@ -219,6 +219,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           captureState.set(tabId, message.recording);
         }
         log('info', `Capture ${message.recording ? 'started' : 'stopped'}`, `tab: ${tabId}, platform: ${message.platform || 'unknown'}`);
+        // Broadcast state change to sidebar/popup
+        chrome.runtime.sendMessage({
+          type: 'CAPTURE_STATE_CHANGED',
+          recording: message.recording,
+          tabId,
+        }).catch(() => {}); // No listeners is fine
         return { ok: true };
       }
       case 'CONVERSATION_CAPTURED': {

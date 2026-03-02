@@ -31,13 +31,37 @@ export function Dashboard() {
   const lastLogId = useRef(0);
   const logEndRef = useRef<HTMLDivElement>(null);
 
+  async function syncCaptureState() {
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tabs[0]?.id) {
+      try {
+        const result = await chrome.tabs.sendMessage(tabs[0].id, { type: 'GET_CAPTURE_STATE' });
+        setCapturing(result?.recording ?? false);
+      } catch {
+        setCapturing(false);
+      }
+    }
+  }
+
   useEffect(() => {
     loadStats();
     loadRecentFacts();
+    syncCaptureState();
+
+    const handleMessage = (msg: any) => {
+      if (msg.type === 'CAPTURE_STATE_CHANGED') {
+        setCapturing(msg.recording);
+      }
+    };
+    chrome.runtime.onMessage.addListener(handleMessage);
+
     // Poll activity log every 2 seconds
     pollLog();
     const interval = setInterval(pollLog, 2000);
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      chrome.runtime.onMessage.removeListener(handleMessage);
+    };
   }, []);
 
   async function loadStats() {
