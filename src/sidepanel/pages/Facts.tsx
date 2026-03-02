@@ -6,6 +6,7 @@ import type { Fact } from '@/types';
 export function Facts() {
   const [facts, setFacts] = useState<Fact[]>([]);
   const [filter, setFilter] = useState({ status: 'all', category: 'all', search: '' });
+  const [mergeNotice, setMergeNotice] = useState<string | null>(null);
 
   useEffect(() => { loadFacts(); }, []);
 
@@ -30,6 +31,8 @@ export function Facts() {
   async function handleConfirm(id: string) {
     await updateFact(id, { status: 'confirmed', updatedAt: Date.now() });
     await loadFacts();
+    setMergeNotice('Fact confirmed — go to Docs tab to merge');
+    setTimeout(() => setMergeNotice(null), 4000);
   }
 
   async function handleReject(id: string) {
@@ -48,6 +51,8 @@ export function Facts() {
       await updateFact(f.id, { status: 'confirmed', updatedAt: Date.now() });
     }
     await loadFacts();
+    setMergeNotice(`${pending.length} facts confirmed — go to Docs tab to merge`);
+    setTimeout(() => setMergeNotice(null), 4000);
   }
 
   return (
@@ -60,6 +65,12 @@ export function Facts() {
         onInput={(e) => setFilter({ ...filter, search: (e.target as HTMLInputElement).value })}
         class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
       />
+
+      {mergeNotice && (
+        <div class="px-3 py-2 bg-green-50 border border-green-200 rounded-lg text-xs text-green-700">
+          {mergeNotice}
+        </div>
+      )}
 
       {/* Filter bar */}
       <div class="flex gap-2">
