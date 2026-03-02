@@ -2,7 +2,7 @@ export interface DocumentHistoryEntry {
   content: string;
   version: number;
   timestamp: number;
-  source: 'merge' | 'manual-edit';
+  source: 'merge' | 'manual-edit' | 'aboutme-generate';
 }
 
 export interface MemoryDocument {
