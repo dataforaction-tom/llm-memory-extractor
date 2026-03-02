@@ -33,6 +33,11 @@ export default defineConfig({
     emptyOutDir: true,
     rollupOptions: {
       input: {
+        // CRXJS auto-discovers index.html from Chrome's side_panel key but not
+        // from Firefox's sidebar_action, so include it explicitly for Firefox.
+        ...(browser === 'firefox'
+          ? { sidepanel: resolve(__dirname, 'src/sidepanel/index.html') }
+          : {}),
         editor: resolve(__dirname, 'src/sidepanel/editor.html'),
       },
     },
