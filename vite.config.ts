@@ -31,5 +31,10 @@ export default defineConfig({
   build: {
     outDir: `dist-${browser}`,
     emptyOutDir: true,
+    rollupOptions: {
+      input: {
+        editor: resolve(__dirname, 'src/sidepanel/editor.html'),
+      },
+    },
   },
 });

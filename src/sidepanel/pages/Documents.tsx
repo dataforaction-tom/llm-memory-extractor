@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'preact/hooks';
 import { getAllDocuments } from '@/storage/db';
 import { loadSchema } from '@/core/schema';
-import { getUnmergedFacts, saveManualEdit } from '@/core/merge';
+import { getUnmergedFacts, runMerge, applyMerge, saveManualEdit, restoreVersion } from '@/core/merge';
 import { renderMarkdown } from '@/core/render-markdown';
+import { DiffView } from '../components/DiffView';
+import { VersionHistory } from '../components/VersionHistory';
+import { syncDocument, downloadDocument, hasFileSystemAccess } from '@/storage/filesystem';
 import type { MemoryDocument, Category } from '@/types';
 
 interface DocSummary {
@@ -114,7 +117,21 @@ function DocumentEditor({ doc: initialDoc, onBack }: { doc: MemoryDocument; onBa
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
 
+  // Merge state
+  const [mergeResult, setMergeResult] = useState<{ oldContent: string; newContent: string } | null>(null);
+  const [merging, setMerging] = useState(false);
+  const [mergeError, setMergeError] = useState('');
+  const [unmergedCount, setUnmergedCount] = useState(0);
+  const [applyingMerge, setApplyingMerge] = useState(false);
+
+  // Version history state
+  const [showHistory, setShowHistory] = useState(false);
+
   const hasChanges = editContent !== doc.content;
+
+  useEffect(() => {
+    getUnmergedFacts(doc.categoryId).then((f) => setUnmergedCount(f.length));
+  }, [doc]);
 
   async function handleSave() {
     if (!hasChanges) return;
@@ -126,9 +143,66 @@ function DocumentEditor({ doc: initialDoc, onBack }: { doc: MemoryDocument; onBa
     setTimeout(() => setSaveMsg(''), 2000);
   }
 
+  async function handleMerge() {
+    setMerging(true);
+    setMergeError('');
+    try {
+      const result = await runMerge(doc.categoryId);
+      if (result) {
+        setMergeResult({ oldContent: result.oldContent, newContent: result.newContent });
+      }
+    } catch (err) {
+      setMergeError(err instanceof Error ? err.message : 'Merge failed');
+    }
+    setMerging(false);
+  }
+
+  async function handleApplyMerge() {
+    if (!mergeResult) return;
+    setApplyingMerge(true);
+    const updated = await applyMerge(doc, mergeResult.newContent);
+    setDoc(updated);
+    setEditContent(updated.content);
+    setMergeResult(null);
+    setUnmergedCount(0);
+    setApplyingMerge(false);
+  }
+
+  async function handleRestore(index: number) {
+    const updated = await restoreVersion(doc, index);
+    setDoc(updated);
+    setEditContent(updated.content);
+    setShowHistory(false);
+  }
+
   function handlePopOut() {
     const url = chrome.runtime.getURL(`src/sidepanel/editor.html?docId=${doc.id}`);
     window.open(url, '_blank', 'width=900,height=700');
+  }
+
+  // Show diff review if merge result is pending
+  if (mergeResult) {
+    return (
+      <DiffView
+        oldContent={mergeResult.oldContent}
+        newContent={mergeResult.newContent}
+        onApply={handleApplyMerge}
+        onDiscard={() => setMergeResult(null)}
+        applying={applyingMerge}
+      />
+    );
+  }
+
+  // Show version history
+  if (showHistory) {
+    return (
+      <VersionHistory
+        history={doc.history}
+        currentVersion={doc.version}
+        onRestore={handleRestore}
+        onClose={() => setShowHistory(false)}
+      />
+    );
   }
 
   return (
@@ -148,6 +222,20 @@ function DocumentEditor({ doc: initialDoc, onBack }: { doc: MemoryDocument; onBa
           </button>
         )}
         <button
+          onClick={() => setShowHistory(true)}
+          class="text-xs px-2 py-1 border border-gray-200 rounded hover:bg-gray-50"
+          title="Version history"
+        >
+          History
+        </button>
+        <button
+          onClick={() => hasFileSystemAccess() ? syncDocument(doc) : downloadDocument(doc)}
+          class="text-xs px-2 py-1 border border-gray-200 rounded hover:bg-gray-50"
+          title={hasFileSystemAccess() ? 'Sync to folder' : 'Download .md'}
+        >
+          {hasFileSystemAccess() ? 'Sync' : 'Download'}
+        </button>
+        <button
           onClick={handlePopOut}
           class="text-xs px-2 py-1 border border-gray-200 rounded hover:bg-gray-50"
           title="Open in new window"
@@ -155,6 +243,25 @@ function DocumentEditor({ doc: initialDoc, onBack }: { doc: MemoryDocument; onBa
           &#x2934;
         </button>
       </div>
+
+      {/* Merge banner */}
+      {unmergedCount > 0 && (
+        <div class="flex items-center justify-between px-3 py-2 bg-yellow-50 border-b border-yellow-200">
+          <span class="text-xs text-yellow-700">
+            {unmergedCount} fact{unmergedCount !== 1 ? 's' : ''} ready to merge
+          </span>
+          <button
+            onClick={handleMerge}
+            disabled={merging}
+            class="text-xs px-3 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600 disabled:opacity-50"
+          >
+            {merging ? 'Merging...' : 'Review Merge'}
+          </button>
+        </div>
+      )}
+      {mergeError && (
+        <div class="px-3 py-2 bg-red-50 border-b border-red-200 text-xs text-red-700">{mergeError}</div>
+      )}
 
       {/* Tab switcher */}
       <div class="flex border-b border-gray-200 bg-white">

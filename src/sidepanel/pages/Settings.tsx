@@ -4,15 +4,22 @@ import { exportAsJSON, importFromJSON, downloadFile } from '@/storage/export';
 import { factsToMarkdown } from '@/core/markdown';
 import { getAllFacts, clearAllFacts, clearAllConversations } from '@/storage/db';
 import { loadSchema, resetSchema } from '@/core/schema';
+import { hasFileSystemAccess, pickSyncFolder, verifyPermission, syncAllDocuments } from '@/storage/filesystem';
 import type { ProviderConfig as ProviderConfigType } from '@/types';
 
 export function Settings() {
   const [config, setConfig] = useState<ProviderConfigType>({ type: 'ollama' });
+  const [syncFolder, setSyncFolder] = useState<string | null>(null);
 
   useEffect(() => {
     chrome.runtime.sendMessage({ type: 'GET_PROVIDER_CONFIG' }).then((c: any) => {
       if (c) setConfig(c);
     });
+    if (hasFileSystemAccess()) {
+      verifyPermission().then((handle) => {
+        if (handle) setSyncFolder(handle.name);
+      });
+    }
   }, []);
 
   async function handleConfigChange(newConfig: ProviderConfigType) {
@@ -84,6 +91,35 @@ export function Settings() {
           <ProviderConfig config={config} onChange={handleConfigChange} />
         </div>
       </div>
+
+      {/* Sync Folder (Chromium only) */}
+      {hasFileSystemAccess() && (
+        <div>
+          <h3 class="font-medium text-gray-900 mb-3">Sync Folder</h3>
+          <div class="flex gap-2">
+            <button
+              onClick={async () => {
+                const handle = await pickSyncFolder();
+                if (handle) setSyncFolder(handle.name);
+              }}
+              class="text-xs px-3 py-1.5 border border-gray-200 rounded hover:bg-gray-50"
+            >
+              {syncFolder ? `Folder: ${syncFolder}` : 'Choose Sync Folder'}
+            </button>
+            {syncFolder && (
+              <button
+                onClick={async () => {
+                  const count = await syncAllDocuments();
+                  alert(`Synced ${count} documents.`);
+                }}
+                class="text-xs px-3 py-1.5 border border-gray-200 rounded hover:bg-gray-50"
+              >
+                Sync All Now
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Export */}
       <div>
