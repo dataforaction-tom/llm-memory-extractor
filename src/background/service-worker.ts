@@ -66,6 +66,16 @@ async function handleConversationCaptured(data: {
 }) {
   log('info', `Conversation received from ${data.platform}`, `${data.messages.length} messages, title: "${data.title}"`);
 
+  // --- Diagnostic: log each message's role, content length, and preview ---
+  const totalContentChars = data.messages.reduce((sum, m) => sum + (m.content?.length || 0), 0);
+  log('info', 'Message content diagnostic', `total content chars: ${totalContentChars}, avg per message: ${Math.round(totalContentChars / data.messages.length)}`);
+  data.messages.forEach((m, i) => {
+    const len = m.content?.length || 0;
+    const preview = (m.content || '').substring(0, 120).replace(/\n/g, '\\n');
+    log('info', `  msg[${i}] ${m.role} (${len} chars)`, preview || '(empty)');
+  });
+  // --- End diagnostic ---
+
   // 1. Skip short conversations (< 3 messages)
   if (data.messages.length < 3) {
     log('warn', 'Skipped: too few messages', `Only ${data.messages.length} messages (need >= 3)`);
@@ -105,7 +115,8 @@ async function handleConversationCaptured(data: {
   log('info', 'LLM provider ready', `type: ${config?.type || 'ollama'}, model: ${config?.model || 'llama3'}`);
 
   // 6. Call LLM with keepalive
-  log('info', 'Calling LLM for extraction...', `prompt length: ${userMessage.length} chars`);
+  log('info', 'Calling LLM for extraction...', `system prompt: ${systemPrompt.length} chars, user message: ${userMessage.length} chars`);
+  log('info', 'User message preview (first 300 chars)', userMessage.substring(0, 300).replace(/\n/g, '\\n'));
   chrome.alarms.create('extraction-keepalive', { periodInMinutes: 0.4 });
   try {
     const response = await provider.chat(

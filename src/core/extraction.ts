@@ -30,7 +30,7 @@ export function buildExtractionPrompt(schema: ExtractionSchema): string {
 
     for (const category of enabledCategories) {
       const lines: string[] = [];
-      lines.push(`### ${category.name}`);
+      lines.push(`### ${category.name} (id: "${category.id}")`);
       lines.push(category.description);
 
       if (category.extractionHints.length > 0) {
@@ -67,10 +67,23 @@ export function buildExtractionPrompt(schema: ExtractionSchema): string {
   // Extraction rules (static)
   sections.push(`## Extraction Rules:
 - Only extract facts about the USER, never about the assistant
-- Each fact must be directly stated or strongly implied by the user
+- Extract GENEROUSLY — the user's questions reveal as much as their statements
+- What to extract from user messages:
+  - Explicit statements ("I work in local government")
+  - Topics they ask detailed questions about (deep interest = worth recording)
+  - Domains they have expertise in (informed questions signal knowledge)
+  - Their analytical perspective (e.g., skeptical of metrics, data-driven, evidence-focused)
+  - Specific subjects, frameworks, datasets, or tools they reference
+  - Professional context implied by their questions
+  - Geographic/cultural context (e.g., UK-focused, US healthcare, etc.)
+- A user asking sophisticated questions about IMD data tells you they are interested in IMD, interested in data-driven decisions, possibly work in public sector or philanthropy, care about evidence vs metrics theater, etc. Extract ALL of these.
 - Assign confidence: 1.0 for explicitly stated, 0.7-0.9 for strongly implied, 0.5-0.6 for loosely implied
 - Include an exact quote from the conversation as evidence
-- Use descriptive snake_case keys (e.g., preferred_programming_language, exercise_routine)`);
+- Use descriptive snake_case keys (e.g., preferred_programming_language, interest_in_deprivation_metrics)
+- Prefer MULTIPLE specific facts over one vague fact (e.g., "interested in IMD" + "interested in data-driven policy" + "interested in philanthropy targeting" rather than just "interested in local government")`);
+
+  // Valid category IDs list
+  const validIds = enabledCategories.map((c) => `"${c.id}"`).join(', ');
 
   // Output format (static)
   sections.push(`## Output Format:
@@ -80,12 +93,14 @@ Return a JSON object with this exact structure:
     {
       "key": "descriptive_snake_case_key",
       "value": { "text": "the extracted information" },
-      "categoryId": "category_id",
+      "categoryId": "one_of_the_category_ids_listed_above",
       "confidence": 0.95,
       "evidenceQuote": "exact quote from conversation"
     }
   ]
 }
+
+IMPORTANT: categoryId MUST be one of these exact values: ${validIds}
 
 Return ONLY valid JSON. No markdown, no explanation, no additional text.`);
 
@@ -105,16 +120,26 @@ Return ONLY valid JSON. No markdown, no explanation, no additional text.`);
  */
 /**
  * Maximum character budget for the conversation transcript.
- * Keeps total prompt within typical model context windows.
- * ~8K chars ≈ ~2K tokens, leaving room for the system prompt.
+ * Most extraction models support 128K+ tokens. We use 50K chars (~12K tokens)
+ * which is generous but still leaves room for the system prompt and response.
  */
-const MAX_CONVERSATION_CHARS = 8000;
+const MAX_CONVERSATION_CHARS = 50000;
+
+/**
+ * Maximum characters per individual message.
+ * Long assistant responses rarely contain user facts; truncate them to save budget.
+ */
+const MAX_MESSAGE_CHARS = 3000;
 
 export function formatConversationForExtraction(messages: Message[]): string {
-  // Format all messages
+  // Format all messages, truncating overly long individual messages
   const formatted = messages.map((msg) => {
     const role = msg.role.toUpperCase();
-    return `[${role}]: ${msg.content}`;
+    let content = msg.content;
+    if (content.length > MAX_MESSAGE_CHARS) {
+      content = content.substring(0, MAX_MESSAGE_CHARS) + '... [truncated]';
+    }
+    return `[${role}]: ${content}`;
   });
 
   let result = formatted.join('\n');
@@ -124,37 +149,11 @@ export function formatConversationForExtraction(messages: Message[]): string {
     return result;
   }
 
-  // Truncate: keep first few and last few messages (most facts are at start/end)
+  // Over budget: hard-truncate the formatted string, keeping start and end
   const half = Math.floor(MAX_CONVERSATION_CHARS / 2);
-  const keepStart: string[] = [];
-  const keepEnd: string[] = [];
-  let startLen = 0;
-  let endLen = 0;
-
-  for (const line of formatted) {
-    if (startLen + line.length + 1 <= half) {
-      keepStart.push(line);
-      startLen += line.length + 1;
-    } else {
-      break;
-    }
-  }
-
-  for (let i = formatted.length - 1; i >= keepStart.length; i--) {
-    if (endLen + formatted[i].length + 1 <= half) {
-      keepEnd.unshift(formatted[i]);
-      endLen += formatted[i].length + 1;
-    } else {
-      break;
-    }
-  }
-
-  const skipped = messages.length - keepStart.length - keepEnd.length;
-  result = [
-    ...keepStart,
-    `\n[... ${skipped} messages truncated for context window ...]\n`,
-    ...keepEnd,
-  ].join('\n');
+  const start = result.substring(0, half);
+  const end = result.substring(result.length - half);
+  result = start + '\n\n[... middle of conversation truncated ...]\n\n' + end;
 
   return result;
 }

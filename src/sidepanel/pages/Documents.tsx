@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'preact/hooks';
-import { getAllDocuments } from '@/storage/db';
+import { getAllDocuments, getAllFacts } from '@/storage/db';
 import { loadSchema } from '@/core/schema';
 import { getUnmergedFacts, runMerge, applyMerge, saveManualEdit, restoreVersion } from '@/core/merge';
 import { renderMarkdown } from '@/core/render-markdown';
@@ -25,40 +25,50 @@ export function Documents() {
 
   async function load() {
     setLoading(true);
-    const [allDocs, schema] = await Promise.all([getAllDocuments(), loadSchema()]);
+    try {
+      const [allDocs, schema] = await Promise.all([getAllDocuments(), loadSchema()]);
+      const allFacts = await getAllFacts();
 
-    const summaries: DocSummary[] = [];
-    for (const doc of allDocs) {
-      const category = schema.categories.find((c) => c.id === doc.categoryId) ?? null;
-      const unmerged = await getUnmergedFacts(doc.categoryId);
-      summaries.push({ doc, category, unmergedCount: unmerged.length });
-    }
+      console.log(`[LME Documents] load: ${allDocs.length} existing docs, ${schema.categories.length} categories, ${allFacts.length} total facts`);
+      console.log(`[LME Documents] confirmed facts:`, allFacts.filter(f => f.status === 'confirmed').map(f => ({ id: f.id, key: f.key, categoryId: f.categoryId, updatedAt: f.updatedAt })));
 
-    // Also check categories with no doc yet but with unmerged facts
-    for (const cat of schema.categories) {
-      if (!allDocs.some((d) => d.categoryId === cat.id)) {
-        const unmerged = await getUnmergedFacts(cat.id);
-        if (unmerged.length > 0) {
-          summaries.push({
-            doc: {
-              id: cat.id,
-              categoryId: cat.id,
-              title: cat.name,
-              content: '',
-              version: 0,
-              history: [],
-              updatedAt: 0,
-              syncedAt: null,
-            },
-            category: cat,
-            unmergedCount: unmerged.length,
-          });
+      const summaries: DocSummary[] = [];
+      for (const doc of allDocs) {
+        const category = schema.categories.find((c) => c.id === doc.categoryId) ?? null;
+        const unmerged = await getUnmergedFacts(doc.categoryId);
+        summaries.push({ doc, category, unmergedCount: unmerged.length });
+      }
+
+      // Also check categories with no doc yet but with unmerged facts
+      for (const cat of schema.categories) {
+        if (!allDocs.some((d) => d.categoryId === cat.id)) {
+          const unmerged = await getUnmergedFacts(cat.id);
+          if (unmerged.length > 0) {
+            console.log(`[LME Documents] category "${cat.id}" (${cat.name}) has ${unmerged.length} unmerged facts`);
+            summaries.push({
+              doc: {
+                id: cat.id,
+                categoryId: cat.id,
+                title: cat.name,
+                content: '',
+                version: 0,
+                history: [],
+                updatedAt: 0,
+                syncedAt: null,
+              },
+              category: cat,
+              unmergedCount: unmerged.length,
+            });
+          }
         }
       }
-    }
 
-    summaries.sort((a, b) => b.doc.updatedAt - a.doc.updatedAt);
-    setDocs(summaries);
+      console.log(`[LME Documents] total summaries: ${summaries.length}`);
+      summaries.sort((a, b) => b.doc.updatedAt - a.doc.updatedAt);
+      setDocs(summaries);
+    } catch (err) {
+      console.error('[LME Documents] load failed:', err);
+    }
     setLoading(false);
   }
 

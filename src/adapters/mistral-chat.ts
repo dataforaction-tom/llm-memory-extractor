@@ -17,6 +17,8 @@ export const mistralChatAdapter: SiteAdapter = {
   parseMessages(container) {
     const messages: Message[] = [];
 
+    console.log(`[LME mistral] parseMessages: container=<${container.tagName}.${container.className?.split(' ')[0] || ''}>`);
+
     // Strategy 1: data attributes
     const dataSelectors = [
       '[data-role="user"], [data-role="assistant"]',
@@ -27,58 +29,69 @@ export const mistralChatAdapter: SiteAdapter = {
 
     for (const selector of dataSelectors) {
       const elements = container.querySelectorAll(selector);
+      console.log(`[LME mistral] Strategy 1 selector "${selector}" => ${elements.length} elements`);
       if (elements.length >= 2) {
-        elements.forEach((el) => {
+        elements.forEach((el, i) => {
           const content = el.textContent?.trim() || '';
           if (!content) return;
           const attrs = (el.getAttribute('data-role') || '') +
             (el.getAttribute('data-testid') || '') +
             (el.getAttribute('data-message-role') || '');
           const isUser = /user/i.test(attrs);
+          console.log(`[LME mistral]   el[${i}] <${el.tagName}> attrs="${attrs}" content=${content.length} chars, preview="${content.substring(0, 80)}"`);
           messages.push({ role: isUser ? 'user' : 'assistant', content, timestamp: Date.now() });
         });
+        console.log(`[LME mistral] Strategy 1 matched: ${messages.length} messages`);
         return messages;
       }
     }
 
     // Strategy 2: aria/role attributes
     const ariaEls = container.querySelectorAll('[role="article"], [role="listitem"], [role="row"]');
+    console.log(`[LME mistral] Strategy 2 (aria): ${ariaEls.length} elements`);
     if (ariaEls.length >= 2) {
-      ariaEls.forEach((el) => {
+      ariaEls.forEach((el, i) => {
         const content = el.textContent?.trim() || '';
         if (!content || content.length < 3) return;
         const allText = el.className + ' ' + el.innerHTML.substring(0, 200);
         const isUser = /user|human|you/i.test(allText);
+        console.log(`[LME mistral]   aria[${i}] <${el.tagName}> isUser=${isUser} content=${content.length} chars`);
         messages.push({ role: isUser ? 'user' : 'assistant', content, timestamp: Date.now() });
       });
-      if (messages.length >= 2) return messages;
+      if (messages.length >= 2) {
+        console.log(`[LME mistral] Strategy 2 matched: ${messages.length} messages`);
+        return messages;
+      }
       messages.length = 0;
     }
 
     // Strategy 3: Look for prose blocks (Tailwind markdown rendering)
     const proseEls = container.querySelectorAll('[class*="prose"], [class*="markdown"]');
+    console.log(`[LME mistral] Strategy 3 (prose/markdown): ${proseEls.length} elements`);
     if (proseEls.length >= 1) {
-      // Prose blocks are typically assistant messages. Look for siblings/parents for user messages too.
-      proseEls.forEach((el) => {
+      proseEls.forEach((el, i) => {
         const content = el.textContent?.trim() || '';
+        console.log(`[LME mistral]   prose[${i}] <${el.tagName}.${el.className?.split(' ')[0] || ''}> content=${content.length} chars`);
         if (content) {
           messages.push({ role: 'assistant', content, timestamp: Date.now() });
         }
       });
-      // This only gets assistant messages - not ideal but better than nothing
-      if (messages.length >= 1) return messages;
+      if (messages.length >= 1) {
+        console.log(`[LME mistral] Strategy 3 matched: ${messages.length} messages`);
+        return messages;
+      }
       messages.length = 0;
     }
 
     // Strategy 4: Generic - find alternating content blocks
-    // Look for direct children of a scrollable container that have substantial text
     const scrollable = container.querySelector('[class*="overflow-y"], [class*="scroll"]') || container;
     const children = scrollable.children;
+    console.log(`[LME mistral] Strategy 4 (generic): scrollable=<${scrollable.tagName}.${scrollable.className?.split(' ')[0] || ''}>, ${children.length} children`);
     for (let i = 0; i < children.length; i++) {
       const el = children[i];
       const content = el.textContent?.trim() || '';
       if (content.length < 5) continue;
-      // Alternate user/assistant based on position (common pattern)
+      console.log(`[LME mistral]   child[${i}] <${el.tagName}.${el.className?.split(' ')[0] || ''}> content=${content.length} chars, preview="${content.substring(0, 80)}"`);
       messages.push({
         role: i % 2 === 0 ? 'user' : 'assistant',
         content,
@@ -86,6 +99,7 @@ export const mistralChatAdapter: SiteAdapter = {
       });
     }
 
+    console.log(`[LME mistral] Strategy 4 result: ${messages.length} messages, total: ${messages.reduce((s, m) => s + m.content.length, 0)} chars`);
     return messages;
   },
 
