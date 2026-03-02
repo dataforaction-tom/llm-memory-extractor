@@ -2,14 +2,18 @@ import { useState, useEffect } from 'preact/hooks';
 import { ProviderConfig } from '../components/ProviderConfig';
 import { exportAsJSON, importFromJSON, downloadFile } from '@/storage/export';
 import { factsToMarkdown } from '@/core/markdown';
-import { getAllFacts, clearAllFacts, clearAllConversations } from '@/storage/db';
+import { getAllFacts, clearAllFacts, clearAllConversations, getDocument } from '@/storage/db';
 import { loadSchema, resetSchema } from '@/core/schema';
 import { hasFileSystemAccess, pickSyncFolder, verifyPermission, syncAllDocuments } from '@/storage/filesystem';
+import { generateAboutMe, ABOUTME_ID } from '@/core/aboutme';
 import type { ProviderConfig as ProviderConfigType } from '@/types';
 
 export function Settings() {
   const [config, setConfig] = useState<ProviderConfigType>({ type: 'ollama' });
   const [syncFolder, setSyncFolder] = useState<string | null>(null);
+  const [aboutMeStatus, setAboutMeStatus] = useState<string | null>(null);
+  const [generatingAboutMe, setGeneratingAboutMe] = useState(false);
+  const [aboutMeError, setAboutMeError] = useState('');
 
   useEffect(() => {
     chrome.runtime.sendMessage({ type: 'GET_PROVIDER_CONFIG' }).then((c: any) => {
@@ -20,6 +24,14 @@ export function Settings() {
         if (handle) setSyncFolder(handle.name);
       });
     }
+  }, []);
+
+  useEffect(() => {
+    getDocument(ABOUTME_ID).then((doc) => {
+      if (doc) {
+        setAboutMeStatus(`Last generated ${new Date(doc.updatedAt).toLocaleString()} (v${doc.version})`);
+      }
+    });
   }, []);
 
   async function handleConfigChange(newConfig: ProviderConfigType) {
@@ -82,27 +94,41 @@ export function Settings() {
     }
   }
 
+  async function handleGenerateAboutMe() {
+    setGeneratingAboutMe(true);
+    setAboutMeError('');
+    try {
+      const doc = await generateAboutMe();
+      if (doc) {
+        setAboutMeStatus(`Last generated ${new Date(doc.updatedAt).toLocaleString()} (v${doc.version})`);
+      } else {
+        setAboutMeError('No documents with content to summarise yet.');
+      }
+    } catch (e) {
+      setAboutMeError((e as Error).message);
+    }
+    setGeneratingAboutMe(false);
+  }
+
   return (
     <div class="p-4 space-y-6">
       {/* Provider config */}
-      <div>
-        <h3 class="font-medium text-gray-900 mb-3">LLM Provider</h3>
-        <div class="bg-white rounded-lg border border-gray-200 p-3">
-          <ProviderConfig config={config} onChange={handleConfigChange} />
-        </div>
-      </div>
+      <section>
+        <h3 class="text-sm font-serif text-ink mb-3">LLM Provider</h3>
+        <ProviderConfig config={config} onChange={handleConfigChange} />
+      </section>
 
       {/* Sync Folder (Chromium only) */}
       {hasFileSystemAccess() && (
-        <div>
-          <h3 class="font-medium text-gray-900 mb-3">Sync Folder</h3>
+        <section>
+          <h3 class="text-sm font-serif text-ink mb-3">Sync Folder</h3>
           <div class="flex gap-2">
             <button
               onClick={async () => {
                 const handle = await pickSyncFolder();
                 if (handle) setSyncFolder(handle.name);
               }}
-              class="text-xs px-3 py-1.5 border border-gray-200 rounded hover:bg-gray-50"
+              class="text-xs px-3 py-1.5 border border-border rounded-md hover:bg-ivory transition-colors text-ink-secondary"
             >
               {syncFolder ? `Folder: ${syncFolder}` : 'Choose Sync Folder'}
             </button>
@@ -112,51 +138,72 @@ export function Settings() {
                   const count = await syncAllDocuments();
                   alert(`Synced ${count} documents.`);
                 }}
-                class="text-xs px-3 py-1.5 border border-gray-200 rounded hover:bg-gray-50"
+                class="text-xs px-3 py-1.5 border border-border rounded-md hover:bg-ivory transition-colors text-ink-secondary"
               >
                 Sync All Now
               </button>
             )}
           </div>
-        </div>
+        </section>
       )}
 
+      {/* About Me Profile */}
+      <section>
+        <h3 class="text-sm font-serif text-ink mb-1">About Me Profile</h3>
+        <p class="text-[11px] text-ink-muted mb-3">
+          Generate a unified profile document from all your memory documents.
+        </p>
+        {aboutMeStatus && (
+          <p class="text-[11px] text-ink-muted mb-2">{aboutMeStatus}</p>
+        )}
+        <button
+          onClick={handleGenerateAboutMe}
+          disabled={generatingAboutMe}
+          class="text-xs px-3 py-1.5 border border-accent/40 rounded-md hover:bg-accent/5 transition-colors text-accent disabled:opacity-50"
+        >
+          {generatingAboutMe ? 'Generating...' : aboutMeStatus ? 'Regenerate About Me' : 'Generate About Me'}
+        </button>
+        {aboutMeError && (
+          <p class="text-[11px] text-rose mt-2">{aboutMeError}</p>
+        )}
+      </section>
+
       {/* Export */}
-      <div>
-        <h3 class="font-medium text-gray-900 mb-3">Export</h3>
+      <section>
+        <h3 class="text-sm font-serif text-ink mb-3">Export</h3>
         <div class="flex gap-2">
-          <button onClick={handleExportMarkdown} class="text-xs px-3 py-1.5 border border-gray-200 rounded hover:bg-gray-50">
-            Export as Markdown
+          <button onClick={handleExportMarkdown} class="text-xs px-3 py-1.5 border border-border rounded-md hover:bg-ivory transition-colors text-ink-secondary">
+            Export Markdown
           </button>
-          <button onClick={handleExportJSON} class="text-xs px-3 py-1.5 border border-gray-200 rounded hover:bg-gray-50">
-            Export as JSON
+          <button onClick={handleExportJSON} class="text-xs px-3 py-1.5 border border-border rounded-md hover:bg-ivory transition-colors text-ink-secondary">
+            Export JSON
           </button>
         </div>
-      </div>
+      </section>
 
       {/* Import */}
-      <div>
-        <h3 class="font-medium text-gray-900 mb-3">Import</h3>
-        <button onClick={handleImportJSON} class="text-xs px-3 py-1.5 border border-gray-200 rounded hover:bg-gray-50">
+      <section>
+        <h3 class="text-sm font-serif text-ink mb-3">Import</h3>
+        <button onClick={handleImportJSON} class="text-xs px-3 py-1.5 border border-border rounded-md hover:bg-ivory transition-colors text-ink-secondary">
           Import JSON Backup
         </button>
-      </div>
+      </section>
 
       {/* Danger zone */}
-      <div>
-        <h3 class="font-medium text-red-600 mb-3">Danger Zone</h3>
-        <div class="border border-red-200 rounded-lg p-3 space-y-2">
-          <button onClick={handleClearFacts} class="block w-full text-left text-xs px-3 py-2 text-red-600 rounded hover:bg-red-50">
+      <section>
+        <h3 class="text-sm font-serif text-rose mb-3">Danger Zone</h3>
+        <div class="border border-rose-light rounded-md divide-y divide-rose-light">
+          <button onClick={handleClearFacts} class="block w-full text-left text-xs px-3 py-2.5 text-rose hover:bg-rose-faint transition-colors">
             Clear All Facts
           </button>
-          <button onClick={handleClearConversations} class="block w-full text-left text-xs px-3 py-2 text-red-600 rounded hover:bg-red-50">
+          <button onClick={handleClearConversations} class="block w-full text-left text-xs px-3 py-2.5 text-rose hover:bg-rose-faint transition-colors">
             Clear All Conversations
           </button>
-          <button onClick={handleResetAll} class="block w-full text-left text-xs px-3 py-2 bg-red-50 text-red-700 font-medium rounded hover:bg-red-100">
+          <button onClick={handleResetAll} class="block w-full text-left text-xs px-3 py-2.5 text-rose font-medium bg-rose-faint hover:bg-rose-light transition-colors rounded-b-md">
             Reset Everything
           </button>
         </div>
-      </div>
+      </section>
     </div>
   );
 }
