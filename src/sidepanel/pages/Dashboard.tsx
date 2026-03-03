@@ -28,6 +28,8 @@ export function Dashboard() {
   const [capturing, setCapturing] = useState(false);
   const [captureStatus, setCaptureStatus] = useState<string | null>(null);
   const [logEntries, setLogEntries] = useState<LogEntry[]>([]);
+  const [activityOpen, setActivityOpen] = useState(false);
+  const [recentOpen, setRecentOpen] = useState(false);
   const lastLogId = useRef(0);
   const logEndRef = useRef<HTMLDivElement>(null);
 
@@ -76,7 +78,6 @@ export function Dashboard() {
   async function loadRecentFacts() {
     try {
       const facts = await getAllFacts();
-      // Sort by createdAt descending, take 10
       const recent = facts.sort((a, b) => b.createdAt - a.createdAt).slice(0, 10);
       setRecentFacts(recent);
     } catch (err) {
@@ -93,10 +94,8 @@ export function Dashboard() {
       if (Array.isArray(entries) && entries.length > 0) {
         lastLogId.current = entries[entries.length - 1].id;
         setLogEntries(prev => [...prev, ...entries].slice(-100));
-        // Also refresh stats when new log entries arrive
         loadStats();
         loadRecentFacts();
-        // Auto-scroll
         setTimeout(() => logEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
       }
     } catch {
@@ -105,7 +104,6 @@ export function Dashboard() {
   }
 
   async function toggleCapture() {
-    // Toggle capture on the active tab
     const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tabs[0]?.id) {
       try {
@@ -144,24 +142,24 @@ export function Dashboard() {
   }
 
   return (
-    <div class="p-4 space-y-6">
+    <div class="p-4 space-y-5">
       {/* Capture controls */}
-      <div class="bg-white rounded-lg border border-gray-200 p-4 space-y-3">
+      <div class="space-y-3">
         <div class="flex items-center justify-between">
           <div>
-            <h3 class="font-medium text-gray-900">Memory Capture</h3>
-            <p class="text-sm text-gray-500">
+            <h3 class="text-sm font-medium text-ink">Memory Capture</h3>
+            <p class="text-xs text-ink-muted mt-0.5">
               {capturing ? 'Recording conversations...' : 'Capture is off'}
             </p>
           </div>
           <button
             onClick={toggleCapture}
             class={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-              capturing ? 'bg-green-500' : 'bg-gray-300'
+              capturing ? 'bg-accent' : 'bg-border'
             }`}
           >
             <span
-              class={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+              class={`inline-block h-4 w-4 transform rounded-full bg-surface shadow-sm transition-transform ${
                 capturing ? 'translate-x-6' : 'translate-x-1'
               }`}
             />
@@ -169,110 +167,123 @@ export function Dashboard() {
         </div>
         <button
           onClick={captureNow}
-          class="w-full py-2 px-3 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
+          class="w-full py-2 px-3 bg-accent hover:bg-accent-hover text-surface text-sm font-medium rounded-md transition-colors"
         >
           Capture This Conversation
         </button>
         {captureStatus && (
-          <p class="text-xs text-gray-600 text-center">{captureStatus}</p>
+          <p class="text-xs text-ink-muted text-center">{captureStatus}</p>
         )}
       </div>
 
-      {/* Stats cards */}
+      {/* Stats */}
       <div class="grid grid-cols-3 gap-3">
-        <StatCard label="Total Facts" value={stats.totalFacts} color="blue" />
-        <StatCard label="Pending" value={stats.pendingFacts} color="yellow" />
-        <StatCard label="Conversations" value={stats.totalConversations} color="green" />
+        <div class="text-center">
+          <p class="text-2xl font-serif text-ink">{stats.totalFacts}</p>
+          <p class="text-[11px] text-ink-muted">Total Facts</p>
+        </div>
+        <div class="text-center">
+          <p class="text-2xl font-serif text-ochre">{stats.pendingFacts}</p>
+          <p class="text-[11px] text-ink-muted">Pending</p>
+        </div>
+        <div class="text-center">
+          <p class="text-2xl font-serif text-ink">{stats.totalConversations}</p>
+          <p class="text-[11px] text-ink-muted">Conversations</p>
+        </div>
       </div>
 
       {/* Activity Log */}
       <div>
-        <div class="flex items-center justify-between mb-2">
-          <h3 class="font-medium text-gray-900">Activity Log</h3>
-          {logEntries.length > 0 && (
-            <button
-              onClick={() => { setLogEntries([]); lastLogId.current = 0; }}
-              class="text-xs text-gray-400 hover:text-gray-600"
+        <button
+          onClick={() => setActivityOpen(!activityOpen)}
+          class="flex items-center justify-between w-full mb-2"
+        >
+          <h3 class="text-sm font-medium text-ink flex items-center gap-1.5">
+            <svg class={`w-3 h-3 text-ink-muted transition-transform ${activityOpen ? 'rotate-90' : ''}`} viewBox="0 0 24 24" fill="currentColor">
+              <path d="M8 5l8 7-8 7z" />
+            </svg>
+            Activity
+            {logEntries.length > 0 && (
+              <span class="text-[10px] text-ink-muted font-normal">({logEntries.length})</span>
+            )}
+          </h3>
+          {activityOpen && logEntries.length > 0 && (
+            <span
+              onClick={(e) => { e.stopPropagation(); setLogEntries([]); lastLogId.current = 0; }}
+              class="text-[11px] text-ink-muted hover:text-ink-secondary transition-colors"
             >
               Clear
-            </button>
+            </span>
           )}
-        </div>
-        <div class="bg-gray-900 rounded-lg p-3 max-h-64 overflow-y-auto font-mono text-xs">
-          {logEntries.length === 0 ? (
-            <p class="text-gray-500">Waiting for activity...</p>
-          ) : (
-            logEntries.map((entry) => (
-              <div key={entry.id} class="mb-1">
-                <span class="text-gray-500">
-                  {new Date(entry.timestamp).toLocaleTimeString()}
-                </span>{' '}
-                <span class={
-                  entry.level === 'error' ? 'text-red-400' :
-                  entry.level === 'warn' ? 'text-yellow-400' :
-                  'text-green-400'
-                }>
-                  {entry.message}
-                </span>
-                {entry.detail && (
-                  <div class="text-gray-400 ml-4 break-all">{entry.detail}</div>
-                )}
-              </div>
-            ))
-          )}
-          <div ref={logEndRef} />
-        </div>
+        </button>
+        {activityOpen && (
+          <div class="bg-log-bg rounded-md p-3 max-h-56 overflow-y-auto font-mono text-[11px] leading-relaxed">
+            {logEntries.length === 0 ? (
+              <p class="text-log-text">Waiting for activity...</p>
+            ) : (
+              logEntries.map((entry) => (
+                <div key={entry.id} class="mb-1">
+                  <span class="text-log-text">
+                    {new Date(entry.timestamp).toLocaleTimeString()}
+                  </span>{' '}
+                  <span class={
+                    entry.level === 'error' ? 'text-log-error' :
+                    entry.level === 'warn' ? 'text-log-warn' :
+                    'text-log-info'
+                  }>
+                    {entry.message}
+                  </span>
+                  {entry.detail && (
+                    <div class="text-log-text ml-4 break-all opacity-75">{entry.detail}</div>
+                  )}
+                </div>
+              ))
+            )}
+            <div ref={logEndRef} />
+          </div>
+        )}
       </div>
 
       {/* Recent Facts */}
       {recentFacts.length > 0 && (
         <div>
-          <h3 class="font-medium text-gray-900 mb-3">Recent Facts</h3>
-          <div class="space-y-2">
-            {recentFacts.map((fact) => (
-              <div key={fact.id} class="bg-white rounded-lg border border-gray-200 p-3">
-                <div class="flex items-center justify-between mb-1">
-                  <span class="text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700">
-                    {fact.categoryId}
-                  </span>
-                  <span class="text-xs text-gray-400">
-                    {new Date(fact.createdAt).toLocaleDateString()}
-                  </span>
+          <button
+            onClick={() => setRecentOpen(!recentOpen)}
+            class="flex items-center w-full mb-2"
+          >
+            <h3 class="text-sm font-medium text-ink flex items-center gap-1.5">
+              <svg class={`w-3 h-3 text-ink-muted transition-transform ${recentOpen ? 'rotate-90' : ''}`} viewBox="0 0 24 24" fill="currentColor">
+                <path d="M8 5l8 7-8 7z" />
+              </svg>
+              Recent
+              <span class="text-[10px] text-ink-muted font-normal">({recentFacts.length})</span>
+            </h3>
+          </button>
+          {recentOpen && (
+            <div class="space-y-1">
+              {recentFacts.map((fact) => (
+                <div key={fact.id} class="py-2.5 border-b border-border-light last:border-0">
+                  <div class="flex items-center justify-between mb-1">
+                    <span class="text-[11px] text-accent font-medium">
+                      {fact.categoryId}
+                    </span>
+                    <span class="text-[11px] text-ink-muted">
+                      {new Date(fact.createdAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                  <p class="text-sm font-medium text-ink">{fact.key.replace(/_/g, ' ')}</p>
+                  <p class="text-xs text-ink-secondary truncate mt-0.5">
+                    {typeof fact.value === 'object'
+                      ? ((fact.value as Record<string, unknown>).text as string) ||
+                        JSON.stringify(fact.value)
+                      : String(fact.value)}
+                  </p>
                 </div>
-                <p class="text-sm font-medium text-gray-900">{fact.key.replace(/_/g, ' ')}</p>
-                <p class="text-xs text-gray-600 truncate">
-                  {typeof fact.value === 'object'
-                    ? ((fact.value as Record<string, unknown>).text as string) ||
-                      JSON.stringify(fact.value)
-                    : String(fact.value)}
-                </p>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
-    </div>
-  );
-}
-
-function StatCard({
-  label,
-  value,
-  color,
-}: {
-  label: string;
-  value: number;
-  color: string;
-}) {
-  const colors: Record<string, string> = {
-    blue: 'border-blue-500 text-blue-600',
-    yellow: 'border-yellow-500 text-yellow-600',
-    green: 'border-green-500 text-green-600',
-  };
-  return (
-    <div class={`bg-white rounded-lg border border-gray-200 border-t-2 ${colors[color]} p-3`}>
-      <p class="text-2xl font-bold">{value}</p>
-      <p class="text-xs text-gray-500">{label}</p>
     </div>
   );
 }
